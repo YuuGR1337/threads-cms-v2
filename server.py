@@ -25,7 +25,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import db, r2, threads_api, ai  # noqa: E402
-from lib import hooks  # noqa: E402
+from lib import hooks, research  # noqa: E402
 
 BASE = Path(__file__).resolve().parent
 WEB = BASE / "web"
@@ -152,9 +152,11 @@ def _plan_autopost(only_handle=None):
             nparts = random.randint(pmin, max(pmin, pmax))
             # pilih tipe hook beda tiap post (rotasi biar gak nabrak)
             hk_id, hk = hook_cats[(have + i) % len(hook_cats)]
+            angle = research.get_angle(niche, lang=lang, avoid=avoid)
             try:
                 text = ai.generate_random(
                     niche, guide, lang=lang, num_parts=nparts, persona=persona,
+                    topic_hint=angle,
                     hook_examples=hk.get("examples"), hook_name=hk.get("name"),
                     avoid_topics=avoid)
             except Exception as e:
@@ -289,9 +291,28 @@ def scheduler_loop():
 
 
 # ── HTTP handler ──────────────────────────────────────────────────────────
+ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}",
+                 f"127.0.0.1:{OAUTH_PORT}", f"localhost:{OAUTH_PORT}"}
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
+
+    def _guard(self):
+        """Tolak DNS rebinding (Host asing) dan POST lintas-origin (CSRF).
+        Return True kalau request boleh lanjut."""
+        host = (self.headers.get("Host") or "").lower()
+        if host not in ALLOWED_HOSTS:
+            self._json({"error": "forbidden host"}, 403)
+            return False
+        origin = self.headers.get("Origin")
+        if self.command == "POST" and origin is not None:
+            netloc = urlparse(origin).netloc.lower()
+            if netloc not in ALLOWED_HOSTS:
+                self._json({"error": "forbidden origin"}, 403)
+                return False
+        return True
 
     def _json(self, obj, code=200):
         data = json.dumps(obj, ensure_ascii=False).encode()
@@ -306,6 +327,8 @@ class H(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(n) or b"{}") if n else {}
 
     def do_GET(self):
+        if not self._guard():
+            return
         u = urlparse(self.path)
         q = parse_qs(u.query)
         path = u.path
@@ -377,6 +400,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": str(e)}, 500)
 
     def do_POST(self):
+        if not self._guard():
+            return
         u = urlparse(self.path)
         path = u.path
         try:
@@ -694,6 +719,10 @@ a{{color:#5b8cff}}</style></head><body><div class=box>
         if "error" in q:
             return _page("❌", "Ditolak",
                          q.get("error_description", q.get("error", ["?"]))[0])
+        state = (q.get("state") or [""])[0]
+        if not threads_api.consume_oauth_state(state):
+            return _page("⚠️", "State OAuth tidak valid",
+                         "Mulai ulang dari tombol Connect di dashboard.")
         code = (q.get("code") or [""])[0].split("#_")[0].strip()
         if not code:
             return _page("⚠️", "Gak ada code di callback")

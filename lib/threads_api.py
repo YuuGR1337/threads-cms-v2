@@ -537,6 +537,14 @@ def _app_config():
     return {}
 
 
+def consume_oauth_state(state):
+    """Satu kali pakai: True kalau state pernah dibuat oleh oauth_authorize_url."""
+    if state and state in _oauth_states:
+        _oauth_states.discard(state)
+        return True
+    return False
+
+
 def oauth_authorize_url(redirect_uri):
     """Build URL Meta authorize. Return (url, state) atau (None, error)."""
     cfg = _app_config()

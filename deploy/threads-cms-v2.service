@@ -1,0 +1,17 @@
+[Unit]
+Description=Threads CMS v2 (dashboard + scheduler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Ganti User dan path sesuai server
+User=threads
+WorkingDirectory=/opt/threads-cms-v2
+ExecStart=/opt/threads-cms-v2/venv/bin/python3 server.py
+Restart=always
+RestartSec=5
+EnvironmentFile=-/opt/threads-cms-v2/.env
+
+[Install]
+WantedBy=multi-user.target

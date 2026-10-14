@@ -53,6 +53,18 @@ def _chat(messages, max_tokens=1200, temperature=None):
 
 
 # ── ambil teks post dari link Threads ──────────────────────────────────────
+def is_threads_url(url):
+    """SSRF guard: cuma https ke domain Threads (cegah file://, IP internal, metadata)."""
+    from urllib.parse import urlparse
+    try:
+        u = urlparse((url or "").strip())
+    except ValueError:
+        return False
+    host = (u.hostname or "").lower()
+    return u.scheme == "https" and host in (
+        "threads.net", "www.threads.net", "threads.com", "www.threads.com")
+
+
 def fetch_thread_texts(urls, handle=None):
     """Coba ambil teks post dari list URL Threads.
     Strategi:
@@ -86,6 +98,8 @@ def fetch_thread_texts(urls, handle=None):
     for url in urls:
         if not url.strip():
             continue
+        if not is_threads_url(url):
+            continue
         try:
             import urllib.request as _ureq
             req = _ureq.Request(url.strip(), headers={
@@ -109,7 +123,7 @@ def fetch_thread_texts(urls, handle=None):
         try:
             from lib import scraper
             for url in urls:
-                if not url.strip():
+                if not url.strip() or not is_threads_url(url):
                     continue
                 try:
                     t = scraper.fetch_post_text(url.strip(), headless=True)

@@ -109,3 +109,28 @@ R2_PREFIX=<prefix>
 ## Status post
 
 `draft` → `scheduled` → `posting` → `posted` / `failed`
+
+
+## Riset topik otomatis
+
+Set `RESEARCH_ENABLED=1` di `.env`. Saat autopost generate utas, CMS cari post
+rame (`RESEARCH_MIN_LIKES`) untuk niche akun via scraper Playwright, LLM
+merangkumnya jadi sudut topik segar, lalu dipakai sebagai `topic_hint`. Hasil
+di-cache 6 jam. Gagal/off = autopost jalan seperti biasa. Butuh sesi login
+scraper (`python3 login_scraper.py`).
+
+## Jalan 24 jam di Linux (systemd)
+
+```bash
+sudo cp deploy/threads-cms-v2.service /etc/systemd/system/   # edit User + path dulu
+sudo systemctl enable --now threads-cms-v2
+```
+
+Dashboard hanya bind ke `127.0.0.1:8455`. Akses dari jauh lewat SSH tunnel:
+`ssh -L 8455:127.0.0.1:8455 user@server`.
+
+## Keamanan
+
+Server mengecek header `Host` (anti DNS rebinding) dan `Origin` pada POST
+(anti CSRF lintas-situs), memvalidasi OAuth `state`, dan hanya mengambil URL
+Threads (`https://threads.com|net`) di fitur belajar gaya.
